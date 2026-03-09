@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#e87d0d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BlenderTracker">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <title>Blender Daily Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --orange: #e87d0d;
+      --orange-dim: rgba(232, 125, 13, 0.15);
+      --orange-glow: rgba(232, 125, 13, 0.4);
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: rgba(232, 125, 13, 0.2);
+      --text: #e8e0d8;
+      --text-dim: rgba(232, 220, 200, 0.4);
+      --green: #5cb85c;
+      --red: #d9534f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans JP', sans-serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Blender-style dot grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(232,125,13,0.08) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Ambient glow */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -30%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(ellipse, rgba(232,125,13,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 0 0 80px;
+      min-height: 100dvh;
+    }
+
+    /* HEADER */
+    header {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10,10,10,0.8);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--orange);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      animation: spin-slow 8s linear infinite;
+    }
+
+    .logo-icon::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: var(--orange);
+      border-radius: 50%;
+    }
+
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .logo-text {
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--orange);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .streak-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--orange-dim);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      color: var(--orange);
+    }
+
+    .streak-badge .flame {
+      font-size: 16px;
+      animation: flicker 1.5s ease-in-out infinite;
+    }
+
+    @keyframes flicker {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.9); }
+    }
+
+    .date-line {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* MAIN CONTENT */
+    main {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* STATUS CARD */
+    .status-card {
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s ease;
+    }
+
+    .status-card.pending {
+      background: var(--surface);
+      border-color: rgba(217, 83, 79, 0.3);
+    }
+
+    .status-card.done {
+      background: linear-gradient(135deg, rgba(92,184,92,0.08) 0%, var(--surface) 100%);
+      border-color: rgba(92,184,92,0.4);
+    }
+
+    .status-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--orange), transparent);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+
+    .status-card.done::before {
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+      opacity: 1;
+    }
+
+    .status-card.pending::before {
+      background: linear-gradient(90deg, transparent, var(--red), transparent);
+      opacity: 1;
+    }
+
+    .status-label {
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    .status-main {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .status-icon {
+      font-size: 40px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .status-text h2 {
+      font-size: 20px;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+
+    .status-text p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .status-card.done .status-text h2 { color: var(--green); }
+    .status-card.pending .status-text h2 { color: var(--red); }
+
+    /* SUBMIT AREA */
+    .submit-area {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .input-label {
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+      resize: none;
+    }
+
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--orange);
+    }
+
+    textarea { min-height: 80px; }
+
+    /* IMAGE UPLOAD */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--orange);
+      background: var(--orange-dim);
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-text {
+      font-size: 13px;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .upload-text .icon { font-size: 28px; margin-bottom: 6px; }
+
+    .preview-img {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      display: none;
+    }
+
+    /* SUBMIT BUTTON */
+    .btn-submit {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--orange), #c96b00);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-family: 'Space Mono', monospace;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 0 20px var(--orange-glow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-submit::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
+      transform: translateX(-100%);
+      transition: transform 0.4s;
+    }
+
+    .btn-submit:hover::after { transform: translateX(100%); }
+    .btn-submit:active { transform: scale(0.98); }
+    .btn-submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* SETTINGS CARD */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title::before {
+      content: '';
+      width: 3px;
+      height: 14px;
+      background: var(--orange);
+      border-radius: 2px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .setting-row:last-child { border-bottom: none; }
+
+    .setting-label {
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .setting-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    input[type="time"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--orange);
+      font-family: 'Space Mono', monospace;
+      font-size: 16px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Toggle */
+    .toggle {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { display: none; }
+
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--surface2);
+      border-radius: 13px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .toggle input:checked + .toggle-track {
+      background: var(--orange);
+      border-color: var(--orange);
+    }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+      pointer-events: none;
+    }
+
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(22px);
+    }
+
+    /* HISTORY */
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .history-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px;
+      background: var(--surface2);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.04);
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .history-thumb {
+      width: 50px;
+      height: 50px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+
+    .history-thumb-placeholder {
+      width: 50px;
+      height: 50px;
+      border-radius: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .history-info { flex: 1; min-width: 0; }
+
+    .history-title {
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+
+    .history-note {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .history-date {
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      color: var(--orange);
+      margin-top: 4px;
+    }
+
+    .history-streak-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+      margin-top: 7px;
+    }
+
+    /* NOTIFICATION PERMISSION */
+    .notif-banner {
+      background: linear-gradient(135deg, rgba(232,125,13,0.12), rgba(232,125,13,0.05));
+      border: 1px solid var(--orange);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .notif-banner-icon { font-size: 28px; flex-shrink: 0; }
+
+    .notif-banner-text { flex: 1; }
+    .notif-banner-text h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .notif-banner-text p { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+
+    .btn-allow {
+      padding: 8px 16px;
+      background: var(--orange);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+      white-space: nowrap;
+      transition: opacity 0.2s;
+    }
+
+    .btn-allow:hover { opacity: 0.85; }
+
+    /* PROGRESS RING */
+    .progress-ring-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 10px 0;
+    }
+
+    .progress-ring {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .progress-ring svg {
+      transform: rotate(-90deg);
+    }
+
+    .progress-ring .bg-circle { stroke: rgba(255,255,255,0.06); }
+    .progress-ring .fg-circle {
+      stroke: var(--orange);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+
+    .progress-ring-label {
+      position: absolute;
+      text-align: center;
+    }
+
+    .progress-ring-label .num {
+      font-family: 'Space Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--orange);
+    }
+
+    .progress-ring-label .sub {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-box {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .stat-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--orange);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* EMPTY STATE */
+    .empty-state {
+      text-align: center;
+      padding: 30px 20px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    .empty-state .icon { font-size: 36px; margin-bottom: 10px; opacity: 0.5; }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--surface);
+      border: 1px solid var(--orange);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* NAV */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      background: rgba(10,10,10,0.95);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 100;
+    }
+
+    .nav-btn {
+      flex: 1;
+      padding: 12px 0 16px;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.2s;
+    }
+
+    .nav-btn .nav-icon { font-size: 20px; }
+    .nav-btn.active { color: var(--orange); }
+
+    /* VIEWS */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* Confirmed submitted items */
+    .submitted-today {
+      background: rgba(92,184,92,0.08);
+      border: 1px solid rgba(92,184,92,0.3);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .submitted-today .check { font-size: 24px; }
+    .submitted-today h3 { font-size: 15px; font-weight: 700; color: var(--green); margin-bottom: 2px; }
+    .submitted-today p { font-size: 12px; color: var(--text-dim); }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .cal-day-label {
+      text-align: center;
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      color: var(--text-dim);
+      padding: 4px 0;
+    }
+
+    .cal-day {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      background: var(--surface2);
+      cursor: default;
+      position: relative;
+    }
+
+    .cal-day.submitted { background: var(--orange); color: white; }
+    .cal-day.today { box-shadow: 0 0 0 2px var(--orange); color: var(--orange); }
+    .cal-day.today.submitted { color: white; }
+    .cal-day.future { opacity: 0.2; }
+    .cal-day.empty { background: transparent; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="header-top">
+      <div class="logo">
+        <div class="logo-icon"></div>
+        <div class="logo-text">Blender Tracker</div>
+      </div>
+      <div class="streak-badge">
+        <span class="flame">🔥</span>
+        <span id="streak-count">0</span> days
+      </div>
+    </div>
+    <div class="date-line" id="date-line"></div>
+  </header>
+
+  <main>
+    <!-- HOME VIEW -->
+    <div class="view active" id="view-home">
+
+      <!-- Notification banner -->
+      <div class="notif-banner" id="notif-banner" style="display:none">
+        <div class="notif-banner-icon">🔔</div>
+        <div class="notif-banner-text">
+          <h3>通知を許可する</h3>
+          <p>毎日のリマインダーをAndroidにも届けます</p>
+        </div>
+        <button class="btn-allow" onclick="requestNotifPermission()">許可</button>
+      </div>
+
+      <!-- Today status -->
+      <div class="status-card pending" id="status-card">
+        <div class="status-label">TODAY'S STATUS</div>
+        <div class="status-main">
+          <div class="status-icon" id="status-icon">⚠️</div>
+          <div class="status-text">
+            <h2 id="status-title">未納品</h2>
+            <p id="status-desc">今日のBlender制作物をまだ提出していません</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit form -->
+      <div id="submit-form">
+        <div class="card">
+          <div class="card-title">制作物を納品する</div>
+          <div class="submit-area">
+            <div class="input-group">
+              <div class="input-label">タイトル *</div>
+              <input type="text" id="title-input" placeholder="例: キャラクターの頭部モデル" maxlength="50">
+            </div>
+            <div class="input-group">
+              <div class="input-label">メモ（任意）</div>
+              <textarea id="note-input" placeholder="今日学んだこと、苦労した点、次の目標など..." maxlength="200"></textarea>
+            </div>
+            <div class="input-group">
+              <div class="input-label">スクリーンショット（任意）</div>
+              <label class="upload-zone" id="upload-zone">
+                <input type="file" id="file-input" accept="image/*" onchange="handleFile(this)">
+                <div class="upload-text">
+                  <div class="icon">📸</div>
+                  <div>タップして画像を選択</div>
+                </div>
+              </label>
+              <img class="preview-img" id="preview-img" alt="preview">
+            </div>
+            <button class="btn-submit" onclick="submitWork()" id="btn-submit">
+              ✓ 今日の制作を納品する
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Already submitted -->
+      <div id="submitted-today-view" style="display:none">
+        <div class="submitted-today">
+          <div class="check">✅</div>
+          <div>
+            <h3 id="submitted-title-display">—</h3>
+            <p id="submitted-time-display">—</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- STATS VIEW -->
+    <div class="view" id="view-stats">
+      <div class="card">
+        <div class="card-title">月間カレンダー</div>
+        <div style="margin-bottom:12px">
+          <div class="calendar-grid" id="cal-labels"></div>
+          <div class="calendar-grid" id="cal-grid"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">統計</div>
+        <div class="progress-ring-container">
+          <div class="progress-ring">
+            <svg width="110" height="110" viewBox="0 0 110 110">
+              <circle class="bg-circle" cx="55" cy="55" r="45" fill="none" stroke-width="8"/>
+              <circle class="fg-circle" id="ring-circle" cx="55" cy="55" r="45" fill="none" stroke-width="8"
+                stroke-dasharray="283" stroke-dashoffset="283"/>
+            </svg>
+            <div class="progress-ring-label">
+              <div class="num" id="ring-percent">0%</div>
+              <div class="sub">達成率</div>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-num" id="stat-total">0</div>
+              <div class="stat-label">総納品数</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-num" id="stat-streak">0</div>
+              <div class="stat-label">🔥 現在の連続</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-num" id="stat-best">0</div>
+              <div class="stat-label">最長記録</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-num" id="stat-month">0</div>
+              <div class="stat-label">今月の納品</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY VIEW -->
+    <div class="view" id="view-history">
+      <div class="card">
+        <div class="card-title">制作履歴</div>
+        <div class="history-list" id="history-list">
+          <div class="empty-state">
+            <div class="icon">📦</div>
+            <div>まだ納品はありません</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS VIEW -->
+    <div class="view" id="view-settings">
+      <div class="card">
+        <div class="card-title">通知設定</div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">デイリーリマインダー</div>
+            <div class="setting-sub">通知を受け取る</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="notif-toggle" onchange="toggleNotifications(this)">
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">通知時刻</div>
+            <div class="setting-sub">未納品の場合この時間に通知</div>
+          </div>
+          <input type="time" id="notif-time" value="22:00" onchange="saveNotifTime(this.value)">
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">通知の状態</div>
+            <div class="setting-sub" id="notif-status-text">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Androidへの通知について</div>
+        <p style="font-size:13px; color:var(--text-dim); line-height:1.7;">
+          Androidでバックグラウンド通知を受け取るには：<br><br>
+          1. ChromeでこのページをPWAとしてインストール<br>
+          （メニュー → 「ホーム画面に追加」）<br><br>
+          2. 「通知を許可」をタップ<br><br>
+          3. アプリを毎日開くか、バックグラウンド実行を許可<br><br>
+          <span style="color:var(--orange);">※ PWAインストール後は、ブラウザを開かなくても通知が届きます</span>
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">データ</div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label" style="color:var(--red)">データをリセット</div>
+            <div class="setting-sub">全ての履歴を削除する</div>
+          </div>
+          <button onclick="resetData()" style="padding:8px 14px;background:rgba(217,83,79,0.15);border:1px solid rgba(217,83,79,0.4);border-radius:8px;color:var(--red);font-size:13px;cursor:pointer;">リセット</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="switchView('home', this)">
+    <span class="nav-icon">🏠</span>
+    <span>ホーム</span>
+  </button>
+  <button class="nav-btn" onclick="switchView('stats', this)">
+    <span class="nav-icon">📊</span>
+    <span>統計</span>
+  </button>
+  <button class="nav-btn" onclick="switchView('history', this)">
+    <span class="nav-icon">📋</span>
+    <span>履歴</span>
+  </button>
+  <button class="nav-btn" onclick="switchView('settings', this)">
+    <span class="nav-icon">⚙️</span>
+    <span>設定</span>
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ============ STATE ============
+  let state = {
+    submissions: [],   // [{date:'2025-03-09', title, note, imgData, time}]
+    notifEnabled: false,
+    notifTime: '22:00',
+  };
+
+  const STORAGE_KEY = 'blender_tracker';
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function loadState() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try { state = { ...state, ...JSON.parse(raw) }; } catch(e) {}
+    }
+  }
+
+  // ============ DATE HELPERS ============
+  function today() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return `${d.getMonth()+1}/${d.getDate()}(${['日','月','火','水','木','金','土'][d.getDay()]})`;
+  }
+
+  // ============ INIT ============
+  loadState();
+
+  // Date line
+  const now = new Date();
+  const days = ['日曜日','月曜日','火曜日','水曜日','木曜日','金曜日','土曜日'];
+  document.getElementById('date-line').textContent =
+    `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${days[now.getDay()]}`;
+
+  // ============ UI ============
+  function switchView(name, btn) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('view-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'stats') renderStats();
+    if (name === 'history') renderHistory();
+  }
+
+  function showToast(msg, duration = 2500) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+  }
+
+  // ============ SUBMISSION ============
+  let imageDataURL = null;
+
+  function handleFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      imageDataURL = e.target.result;
+      const preview = document.getElementById('preview-img');
+      preview.src = imageDataURL;
+      preview.style.display = 'block';
+      document.querySelector('.upload-zone .upload-text').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function submitWork() {
+    const title = document.getElementById('title-input').value.trim();
+    if (!title) { showToast('⚠️ タイトルを入力してください'); return; }
+
+    const note = document.getElementById('note-input').value.trim();
+    const timeStr = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'});
+
+    const submission = {
+      date: today(),
+      title,
+      note,
+      imgData: imageDataURL,
+      time: timeStr,
+    };
+
+    // Remove any existing submission for today
+    state.submissions = state.submissions.filter(s => s.date !== today());
+    state.submissions.unshift(submission);
+    saveState();
+
+    updateHomeView();
+    showToast('🎉 納品完了！おつかれさまでした！');
+    cancelTodayNotification();
+  }
+
+  function updateHomeView() {
+    const todaySub = state.submissions.find(s => s.date === today());
+    const card = document.getElementById('status-card');
+    const form = document.getElementById('submit-form');
+    const submittedView = document.getElementById('submitted-today-view');
+
+    if (todaySub) {
+      card.className = 'status-card done';
+      document.getElementById('status-icon').textContent = '✅';
+      document.getElementById('status-title').textContent = '納品済み！';
+      document.getElementById('status-desc').textContent = `「${todaySub.title}」を提出しました`;
+      form.style.display = 'none';
+      submittedView.style.display = 'block';
+      document.getElementById('submitted-title-display').textContent = todaySub.title;
+      document.getElementById('submitted-time-display').textContent = `${todaySub.time} に納品 • ${todaySub.note || 'メモなし'}`;
+    } else {
+      card.className = 'status-card pending';
+      document.getElementById('status-icon').textContent = '⚠️';
+      document.getElementById('status-title').textContent = '未納品';
+      document.getElementById('status-desc').textContent = '今日のBlender制作物をまだ提出していません';
+      form.style.display = 'block';
+      submittedView.style.display = 'none';
+    }
+
+    // Streak
+    const streak = calcStreak();
+    document.getElementById('streak-count').textContent = streak;
+  }
+
+  // ============ STREAK ============
+  function calcStreak() {
+    const dates = [...new Set(state.submissions.map(s => s.date))].sort().reverse();
+    if (!dates.length) return 0;
+
+    let streak = 0;
+    let check = new Date();
+
+    // If today not submitted, start from yesterday
+    if (dates[0] !== today()) check.setDate(check.getDate() - 1);
+
+    for (const date of dates) {
+      const checkStr = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
+      if (date === checkStr) {
+        streak++;
+        check.setDate(check.getDate() - 1);
+      } else break;
+    }
+    return streak;
+  }
+
+  function calcBestStreak() {
+    const dates = [...new Set(state.submissions.map(s => s.date))].sort();
+    if (!dates.length) return 0;
+    let best = 1, cur = 1;
+    for (let i = 1; i < dates.length; i++) {
+      const prev = new Date(dates[i-1] + 'T00:00:00');
+      const curr = new Date(dates[i] + 'T00:00:00');
+      const diff = (curr - prev) / 86400000;
+      if (diff === 1) { cur++; best = Math.max(best, cur); }
+      else cur = 1;
+    }
+    return best;
+  }
+
+  // ============ STATS ============
+  function renderStats() {
+    const submittedDates = new Set(state.submissions.map(s => s.date));
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const todayNum = now.getDate();
+
+    // Calendar labels
+    const labels = document.getElementById('cal-labels');
+    labels.innerHTML = ['日','月','火','水','木','金','土'].map(d =>
+      `<div class="cal-day-label">${d}</div>`).join('');
+
+    // Calendar grid
+    const grid = document.getElementById('cal-grid');
+    grid.innerHTML = '';
+
+    // Empty cells for offset
+    for (let i = 0; i < firstDay; i++) {
+      grid.innerHTML += `<div class="cal-day empty"></div>`;
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday = d === todayNum;
+      const isSub = submittedDates.has(dateStr);
+      const isFuture = d > todayNum;
+      let cls = 'cal-day';
+      if (isSub) cls += ' submitted';
+      if (isToday) cls += ' today';
+      if (isFuture) cls += ' future';
+      grid.innerHTML += `<div class="${cls}">${d}</div>`;
+    }
+
+    // Stats
+    const totalDays = Math.ceil((now - new Date(year, month, 1)) / 86400000) + 1;
+    const monthSubs = state.submissions.filter(s => s.date.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)).length;
+    const pct = Math.round((monthSubs / totalDays) * 100);
+    const streak = calcStreak();
+    const best = calcBestStreak();
+
+    document.getElementById('stat-total').textContent = state.submissions.length;
+    document.getElementById('stat-streak').textContent = streak;
+    document.getElementById('stat-best').textContent = best;
+    document.getElementById('stat-month').textContent = monthSubs;
+    document.getElementById('ring-percent').textContent = pct + '%';
+
+    const circle = document.getElementById('ring-circle');
+    const circ = 2 * Math.PI * 45;
+    circle.style.strokeDashoffset = circ * (1 - pct/100);
+  }
+
+  // ============ HISTORY ============
+  function renderHistory() {
+    const list = document.getElementById('history-list');
+    if (!state.submissions.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">📦</div><div>まだ納品はありません</div></div>`;
+      return;
+    }
+    list.innerHTML = state.submissions.slice(0,30).map(s => `
+      <div class="history-item">
+        ${s.imgData
+          ? `<img class="history-thumb" src="${s.imgData}" alt="">`
+          : `<div class="history-thumb-placeholder">🖥️</div>`}
+        <div class="history-info">
+          <div class="history-title">${escHtml(s.title)}</div>
+          ${s.note ? `<div class="history-note">${escHtml(s.note)}</div>` : ''}
+          <div class="history-date">${formatDate(s.date)} ${s.time || ''}</div>
+        </div>
+        <div class="history-streak-dot"></div>
+      </div>
+    `).join('');
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ============ NOTIFICATIONS ============
+  let scheduledNotifId = null;
+
+  async function requestNotifPermission() {
+    if (!('Notification' in window)) {
+      showToast('このブラウザは通知をサポートしていません');
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      document.getElementById('notif-banner').style.display = 'none';
+      state.notifEnabled = true;
+      document.getElementById('notif-toggle').checked = true;
+      saveState();
+      scheduleNotification();
+      showToast('🔔 通知が許可されました！');
+      updateNotifStatus();
+    } else {
+      showToast('⚠️ 通知が拒否されました');
+    }
+  }
+
+  function toggleNotifications(el) {
+    if (el.checked) {
+      if (Notification.permission !== 'granted') {
+        el.checked = false;
+        requestNotifPermission();
+        return;
+      }
+      state.notifEnabled = true;
+      scheduleNotification();
+    } else {
+      state.notifEnabled = false;
+      cancelTodayNotification();
+    }
+    saveState();
+    updateNotifStatus();
+  }
+
+  function saveNotifTime(val) {
+    state.notifTime = val;
+    saveState();
+    if (state.notifEnabled) {
+      cancelTodayNotification();
+      scheduleNotification();
+    }
+    updateNotifStatus();
+  }
+
+  function scheduleNotification() {
+    if (!state.notifEnabled || Notification.permission !== 'granted') return;
+
+    // Already submitted today? Don't schedule
+    if (state.submissions.find(s => s.date === today())) return;
+
+    const [h, m] = state.notifTime.split(':').map(Number);
+    const now = new Date();
+    const target = new Date();
+    target.setHours(h, m, 0, 0);
+
+    let delay = target - now;
+    if (delay < 0) return; // Time already passed today
+
+    // Try via service worker
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_NOTIFICATION',
+        delay,
+        title: '🎨 Blender制作、忘れてない？',
+        body: `まだ今日の制作物を納品していません！今すぐBlenderを開こう！`,
+      });
+    } else {
+      // Fallback: setTimeout (only works if tab is open)
+      if (scheduledNotifId) clearTimeout(scheduledNotifId);
+      scheduledNotifId = setTimeout(() => {
+        // Check again at notification time
+        if (!state.submissions.find(s => s.date === today())) {
+          new Notification('🎨 Blender制作、忘れてない？', {
+            body: 'まだ今日の制作物を納品していません！今すぐBlenderを開こう！',
+            icon: './icon.svg',
+            requireInteraction: true,
+            tag: 'daily-reminder',
+          });
+        }
+      }, delay);
+    }
+  }
+
+  function cancelTodayNotification() {
+    if (scheduledNotifId) {
+      clearTimeout(scheduledNotifId);
+      scheduledNotifId = null;
+    }
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'CANCEL_NOTIFICATION' });
+    }
+  }
+
+  function updateNotifStatus() {
+    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+    const statusEl = document.getElementById('notif-status-text');
+    if (perm === 'granted' && state.notifEnabled) {
+      statusEl.textContent = `✅ 有効 — ${state.notifTime} に通知`;
+      statusEl.style.color = '#5cb85c';
+    } else if (perm === 'denied') {
+      statusEl.textContent = '❌ ブラウザで通知が拒否されています';
+      statusEl.style.color = '#d9534f';
+    } else {
+      statusEl.textContent = '— 無効';
+      statusEl.style.color = 'var(--text-dim)';
+    }
+  }
+
+  // ============ SERVICE WORKER ============
+  async function registerSW() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    } catch(e) {}
+  }
+
+  // ============ DATA RESET ============
+  function resetData() {
+    if (!confirm('本当に全データを削除しますか？')) return;
+    state.submissions = [];
+    saveState();
+    updateHomeView();
+    showToast('🗑️ データをリセットしました');
+  }
+
+  // ============ BOOT ============
+  function boot() {
+    registerSW();
+
+    // Show notif banner if not yet granted
+    if ('Notification' in window && Notification.permission === 'default') {
+      document.getElementById('notif-banner').style.display = 'flex';
+    }
+
+    // Apply saved settings
+    document.getElementById('notif-toggle').checked = state.notifEnabled && Notification.permission === 'granted';
+    document.getElementById('notif-time').value = state.notifTime || '22:00';
+
+    updateHomeView();
+    updateNotifStatus();
+    scheduleNotification();
+  }
+
+  boot();
+</script>
+</body>
+</html>

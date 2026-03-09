@@ -1,0 +1,20 @@
+{
+  "name": "Blender Daily Tracker",
+  "short_name": "BlenderTracker",
+  "description": "毎日のBlenderモデリング習慣化アプリ",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#e87d0d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "lifestyle"],
+  "lang": "ja"
+}
